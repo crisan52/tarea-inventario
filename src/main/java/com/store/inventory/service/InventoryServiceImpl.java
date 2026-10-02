@@ -138,11 +138,16 @@ public final class InventoryServiceImpl implements InventoryService {
     }
 
     /**
-     * Sends one alert when available stock reaches the low-stock threshold.
+     * Sends one alert when available stock reaches the low-stock limit.
+     * The product is rearmed when its available stock recovers above the limit.
      */
     private void checkLowStockProducts(String sku, Product product) {
         int availableUnits = calculateAvailableUnits(sku, product);
-        if (availableUnits <= LOW_STOCK_LIMIT && lowStockProducts.add(sku)) {
+        if (availableUnits > LOW_STOCK_LIMIT) {
+            lowStockProducts.remove(sku);
+            return;
+        }
+        if (lowStockProducts.add(sku)) {
             stockAlertListener.onLowStock(sku, availableUnits);
         }
     }
@@ -152,7 +157,23 @@ public final class InventoryServiceImpl implements InventoryService {
      */
     private void removeExpiredReservations() {
         Instant currentTime = clock.instant();
-        activeReservations.values().removeIf(reservation -> !reservation.expiresAt().isAfter(currentTime));
+        boolean expiredReservationRemoved = activeReservations.values()
+                .removeIf(reservation -> !reservation.expiresAt().isAfter(currentTime));
+        if (expiredReservationRemoved) {
+            resetLowStockAlerts();
+        }
+    }
+
+    /**
+     * Resets alerts for products whose available stock recovered above the limit.
+     */
+    private void resetLowStockAlerts() {
+        for (Map.Entry<String, Product> productEntry : products.entrySet()) {
+            int availableUnits = calculateAvailableUnits(productEntry.getKey(), productEntry.getValue());
+            if (availableUnits > LOW_STOCK_LIMIT) {
+                lowStockProducts.remove(productEntry.getKey());
+            }
+        }
     }
 
     /**
