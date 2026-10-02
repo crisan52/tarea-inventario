@@ -29,6 +29,15 @@ public final class Product {
     }
 
     /**
+     * Decreases physical stock after units are sold.
+     *
+     * @param quantity sold units
+     */
+    public void removeStock(int quantity) {
+        stock -= quantity;
+    }
+
+    /**
      * Returns the category used to apply product rules.
      *
      * @return the product category
