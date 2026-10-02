@@ -8,18 +8,23 @@ import com.store.inventory.domain.ReservationRules;
 import java.time.Clock;
 import java.time.Instant;
 import java.util.HashMap;
+import java.util.HashSet;
 import java.util.Map;
 import java.util.Objects;
+import java.util.Set;
 
 /**
  * Keeps products, stock, and active reservations in memory.
  */
 public final class InventoryServiceImpl implements InventoryService {
 
+    private static final int LOW_STOCK_LIMIT = 5;
+
     private final Clock clock;
     private final StockAlertListener stockAlertListener;
     private final Map<String, Product> products = new HashMap<>();
     private final Map<String, Reservation> activeReservations = new HashMap<>();
+    private final Set<String> lowStockProducts = new HashSet<>();
 
     /**
      * Creates the service with the resources needed for inventory rules.
@@ -55,6 +60,7 @@ public final class InventoryServiceImpl implements InventoryService {
             throw new IllegalArgumentException("product must be registered");
         }
         product.addStock(quantity);
+        checkLowStockProducts(sku, product);
     }
 
     /**
@@ -88,6 +94,7 @@ public final class InventoryServiceImpl implements InventoryService {
         Reservation reservation = new Reservation(orderId, sku, quantity,
                 clock.instant().plus(rules.getReservationDuration()));
         activeReservations.put(orderId, reservation);
+        checkLowStockProducts(sku, product);
         return reservation;
     }
 
@@ -128,6 +135,16 @@ public final class InventoryServiceImpl implements InventoryService {
             }
         }
         return product.getStock() - reservedUnits;
+    }
+
+    /**
+     * Sends one alert when available stock reaches the low-stock threshold.
+     */
+    private void checkLowStockProducts(String sku, Product product) {
+        int availableUnits = calculateAvailableUnits(sku, product);
+        if (availableUnits <= LOW_STOCK_LIMIT && lowStockProducts.add(sku)) {
+            stockAlertListener.onLowStock(sku, availableUnits);
+        }
     }
 
     /**
