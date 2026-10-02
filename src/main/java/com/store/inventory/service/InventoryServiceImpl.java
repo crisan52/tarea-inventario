@@ -50,6 +50,8 @@ public final class InventoryServiceImpl implements InventoryService {
 
     /**
      * Adds positive stock to a registered product.
+     * The product must exist before stock can be added.
+     * It checks the low-stock alert after adding stock.
      */
     @Override
     public synchronized void addStock(String sku, int quantity) {
@@ -64,7 +66,9 @@ public final class InventoryServiceImpl implements InventoryService {
     }
 
     /**
-     * A repeated active order identifier returns its existing reservation.
+     * Creates a reservation when the category rules and available stock allow it.
+     * Expired reservations are removed before checking available stock.
+     * If an active order is sent again, the service returns its existing reservation.
      */
     @Override
     public synchronized Reservation reserve(String orderId, String sku, int quantity) {
@@ -98,6 +102,10 @@ public final class InventoryServiceImpl implements InventoryService {
         return reservation;
     }
 
+    /**
+     * Confirms an active reservation and removes its units from physical stock.
+     * Expired reservations cannot be confirmed.
+     */
     @Override
     public synchronized void confirm(String orderId) {
         removeExpiredReservations();
@@ -125,7 +133,7 @@ public final class InventoryServiceImpl implements InventoryService {
 
     /**
      * Calculates units that can still be reserved for a product.
-     * It subtracts units in active reservations from physical stock.
+     * It subtracts units in active reservations for the same SKU from physical stock.
      */
     private int calculateAvailableUnits(String sku, Product product) {
         int reservedUnits = 0;
@@ -138,7 +146,7 @@ public final class InventoryServiceImpl implements InventoryService {
     }
 
     /**
-     * Sends one alert when available stock reaches the low-stock limit.
+     * Sends one alert when available stock reaches or falls below the low-stock limit.
      * The product is rearmed when its available stock recovers above the limit.
      */
     private void checkLowStockProducts(String sku, Product product) {
@@ -154,6 +162,7 @@ public final class InventoryServiceImpl implements InventoryService {
 
     /**
      * Removes reservations that have reached or passed their expiration time.
+     * If stock becomes available again, it resets the related low-stock alerts.
      */
     private void removeExpiredReservations() {
         Instant currentTime = clock.instant();
